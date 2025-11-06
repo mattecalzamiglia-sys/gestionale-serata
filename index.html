@@ -23,6 +23,7 @@
             margin-bottom: 20px;
         }
         h1 { color: #333; margin-bottom: 10px; font-size: 2em; }
+        h2 { color: #333; margin-bottom: 15px; font-size: 1.3em; }
         .subtitle { color: #666; margin-bottom: 30px; }
         input, select {
             width: 100%;
@@ -156,6 +157,8 @@
         }
         .disconnect-btn { background: #f44; margin-top: 20px; }
         .disconnect-btn:hover { background: #c33; }
+        .hidden { display: none !important; }
+        label { display: block; font-weight: bold; color: #333; margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -204,13 +207,13 @@
                 <div class="form-row">
                     <div>
                         <label>Discoteca</label>
-                        <select id="discoteca">
+                        <select id="discoteca" onchange="toggleCustomDiscoteca()">
                             <option value="astrolabio">Astrolabio</option>
                             <option value="borgo">Borgo delle Colonne</option>
                             <option value="custom">Altro (specifica)</option>
                         </select>
                     </div>
-                    <div id="customDiscotecaDiv" style="display:none;">
+                    <div id="customDiscotecaDiv" class="hidden">
                         <label>Specifica Discoteca</label>
                         <input type="text" id="customDiscoteca" placeholder="Nome discoteca">
                     </div>
@@ -230,14 +233,15 @@
                     </div>
                     <div>
                         <label>Categoria</label>
-                        <select id="categoria">
+                        <select id="categoria" onchange="toggleCustomCategoria()">
                             <option value="biglietti">Biglietti</option>
                             <option value="consumazioni">Consumazioni</option>
                             <option value="donazioni">Donazioni</option>
                             <option value="altro">Altro</option>
+                            <option value="custom">Custom</option>
                         </select>
                     </div>
-                    <div id="customCategoriaDiv" style="display:none;">
+                    <div id="customCategoriaDiv" class="hidden">
                         <label>Specifica Categoria</label>
                         <input type="text" id="customCategoria" placeholder="Categoria custom">
                     </div>
@@ -298,6 +302,40 @@
             }
         }
 
+        function toggleCustomDiscoteca() {
+            const selected = document.getElementById('discoteca').value;
+            const customDiv = document.getElementById('customDiscotecaDiv');
+            if (selected === 'custom') {
+                customDiv.classList.remove('hidden');
+            } else {
+                customDiv.classList.add('hidden');
+            }
+        }
+
+        function updateCategories() {
+            const tipo = document.getElementById('tipo').value;
+            const categorySelect = document.getElementById('categoria');
+            
+            const categories = {
+                entrata: ['Biglietti', 'Consumazioni', 'Donazioni', 'Altro', 'Custom'],
+                uscita: ['Materiale', 'DJ', 'Promoter', 'Altro', 'Custom']
+            };
+
+            categorySelect.innerHTML = categories[tipo]
+                .map(c => `<option value="${c.toLowerCase()}">${c}</option>`)
+                .join('');
+        }
+
+        function toggleCustomCategoria() {
+            const selected = document.getElementById('categoria').value;
+            const customDiv = document.getElementById('customCategoriaDiv');
+            if (selected === 'custom') {
+                customDiv.classList.remove('hidden');
+            } else {
+                customDiv.classList.add('hidden');
+            }
+        }
+
         async function addTransaction() {
             const desc = document.getElementById('descrizione').value.trim();
             const importo = document.getElementById('importo').value.trim();
@@ -305,7 +343,6 @@
             let categoria = document.getElementById('categoria').value;
             let discoteca = document.getElementById('discoteca').value;
 
-            // Gestisci categoria custom
             if (categoria === 'custom') {
                 const customCat = document.getElementById('customCategoria').value.trim();
                 if (!customCat) {
@@ -315,7 +352,6 @@
                 categoria = customCat;
             }
 
-            // Gestisci discoteca custom
             if (discoteca === 'custom') {
                 const customDisco = document.getElementById('customDiscoteca').value.trim();
                 if (!customDisco) {
@@ -406,6 +442,7 @@
                             <div class="transaction-desc">${t.description}</div>
                             <div class="transaction-meta">
                                 <span style="background: #ddd; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 10px;">${t.category}</span>
+                                <span style="background: #e0e0ff; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 10px;">${t.discoteca}</span>
                                 ${t.timestamp}
                             </div>
                         </div>
@@ -413,43 +450,6 @@
                         <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑️</button>
                     </div>
                 `).join('');
-            }
-        }
-
-        function updateCategories() {
-            const tipo = document.getElementById('tipo').value;
-            const categorySelect = document.getElementById('categoria');
-            const customDiv = document.getElementById('customCategoriaDiv');
-            
-            const categories = {
-                entrata: ['Biglietti', 'Consumazioni', 'Donazioni', 'Altro', 'Custom'],
-                uscita: ['Materiale', 'DJ', 'Promoter', 'Altro', 'Custom']
-            };
-
-            categorySelect.innerHTML = categories[tipo]
-                .map(c => `<option value="${c.toLowerCase()}">${c}</option>`)
-                .join('');
-            
-            categorySelect.addEventListener('change', toggleCustomCategoria);
-        }
-
-        function toggleCustomCategoria() {
-            const selected = document.getElementById('categoria').value;
-            const customDiv = document.getElementById('customCategoriaDiv');
-            if (selected === 'custom') {
-                customDiv.style.display = 'block';
-            } else {
-                customDiv.style.display = 'none';
-            }
-        }
-
-        function toggleCustomDiscoteca() {
-            const selected = document.getElementById('discoteca').value;
-            const customDiv = document.getElementById('customDiscotecaDiv');
-            if (selected === 'custom') {
-                customDiv.style.display = 'block';
-            } else {
-                customDiv.style.display = 'none';
             }
         }
 
@@ -470,8 +470,6 @@
 
         window.addEventListener('load', () => {
             const saved = localStorage.getItem('sessionId');
-            document.getElementById('discoteca').addEventListener('change', toggleCustomDiscoteca);
-            document.getElementById('categoria').addEventListener('change', toggleCustomCategoria);
             if (saved) {
                 sessionId = saved;
                 document.querySelector('.setup-screen').classList.remove('active');
