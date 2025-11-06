@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestionale Serata</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
     <style>
         * {
             margin: 0;
@@ -93,15 +95,6 @@
             padding: 15px;
             border-radius: 4px;
             color: #c33;
-            margin-bottom: 20px;
-        }
-
-        .success {
-            background: #efe;
-            border-left: 4px solid #4f4;
-            padding: 15px;
-            border-radius: 4px;
-            color: #3c3;
             margin-bottom: 20px;
         }
 
@@ -286,33 +279,21 @@
         <div class="setup-screen active">
             <div class="card">
                 <h1>⚙️ Setup Gestionale Serata</h1>
-                <p class="subtitle">Inserisci i tuoi URL Firebase e Cloudflare</p>
+                <p class="subtitle">Collegamento diretto a Firebase</p>
 
                 <div class="info-box">
-                    <strong>ℹ️ Hai bisogno di:</strong><br>
-                    1. Cloudflare Worker URL<br>
-                    2. Firebase Database URL
+                    <strong>ℹ️ Serve solo il Firebase Database URL</strong><br>
+                    Niente Cloudflare Worker, connessione diretta! 🚀
                 </div>
 
                 <div id="setupError" class="error" style="display:none;"></div>
 
-                <div class="form-row">
-                    <div>
-                        <label>Cloudflare Worker URL</label>
-                        <input type="text" id="workerUrl" placeholder="https://firebase-proxy-matte.workers.dev">
-                    </div>
-                    <div>
-                        <label>Firebase Database URL</label>
-                        <input type="text" id="dbUrl" placeholder="https://gestionale-serata-default-rtdb.europe-west1.firebasedatabase.app">
-                    </div>
-                </div>
-
                 <div>
-                    <label>API Key (opzionale)</label>
-                    <input type="password" id="apiKey" placeholder="Lascia vuoto se non lo hai">
+                    <label>Firebase Database URL</label>
+                    <input type="text" id="dbUrl" placeholder="https://gestionale-serata-default-rtdb.europe-west1.firebasedatabase.app">
                 </div>
 
-                <button onclick="connectSetup()">🔗 Connetti</button>
+                <button onclick="connectSetup()">🔗 Connetti a Firebase</button>
             </div>
         </div>
 
@@ -388,9 +369,10 @@
     </div>
 
     <script>
-        let config = {};
+        let db = null;
         let sessionId = null;
         let transactions = [];
+        let dbRef = null;
 
         function showSetup() {
             document.querySelector('.setup-screen').classList.add('active');
@@ -403,54 +385,55 @@
         }
 
         function connectSetup() {
-            const workerUrl = document.getElementById('workerUrl').value.trim();
             const dbUrl = document.getElementById('dbUrl').value.trim();
-            const apiKey = document.getElementById('apiKey').value.trim();
 
-            if (!workerUrl || !dbUrl) {
-                showError('setupError', 'Compila tutti i campi richiesti');
+            if (!dbUrl) {
+                showError('setupError', 'Compila il Firebase Database URL');
                 return;
             }
 
-            config = { workerUrl, dbUrl, apiKey };
-            sessionId = `session-${Date.now()}`;
-            localStorage.setItem('config', JSON.stringify(config));
-            localStorage.setItem('sessionId', sessionId);
+            try {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyDSD5yXLsnJNrMZasdQBqC8i1d_0U9kpz0",
+                    databaseURL: dbUrl
+                };
 
-            showApp();
-            loadTransactions();
-            setInterval(loadTransactions, 1000);
-        }
+                // Verifica se Firebase è già inizializzato
+                try {
+                    db = firebase.database();
+                } catch (e) {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.database();
+                }
+                
+                sessionId = `session-${Date.now()}`;
+                dbRef = db.ref(`transactions/${sessionId}`);
+                
+                localStorage.setItem('dbUrl', dbUrl);
+                localStorage.setItem('sessionId', sessionId);
 
-        function buildWorkerUrl(path) {
-            const baseUrl = config.workerUrl.endsWith('/') ? config.workerUrl.slice(0, -1) : config.workerUrl;
-            const dbUrl = config.dbUrl.endsWith('/') ? config.dbUrl.slice(0, -1) : config.dbUrl;
-            
-            const params = new URLSearchParams();
-            params.append('key', config.apiKey || 'test');
-            params.append('db', dbUrl);
-            params.append('path', path);
-            
-            return `${baseUrl}/?${params.toString()}`;
+                showApp();
+                loadTransactions();
+            } catch (error) {
+                console.error('Errore connessione Firebase:', error);
+                showError('setupError', 'Errore nella connessione: ' + error.message);
+            }
         }
 
         function loadTransactions() {
-            if (!config.workerUrl || !sessionId) return;
+            if (!dbRef) return;
 
-            const url = buildWorkerUrl(`transactions/${sessionId}`);
-            console.log('Loading from:', url);
-
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    if (data && typeof data === 'object' && !data.error) {
-                        transactions = Object.values(data).sort((a, b) => b.id - a.id);
-                    } else {
-                        transactions = [];
-                    }
-                    updateUI();
-                })
-                .catch(e => console.error('Errore caricamento:', e));
+            dbRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    transactions = Object.values(data).sort((a, b) => b.id - a.id);
+                } else {
+                    transactions = [];
+                }
+                updateUI();
+            }, (error) => {
+                console.error('Errore caricamento:', error);
+            });
         }
 
         function addTransaction() {
@@ -474,33 +457,22 @@
                 sessionId
             };
 
-            const url = buildWorkerUrl(`transactions/${sessionId}/${transaction.id}`);
-
-            fetch(url, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(transaction)
-            })
-                .then(r => r.json())
+            dbRef.child(transaction.id).set(transaction)
                 .then(() => {
                     document.getElementById('descrizione').value = '';
                     document.getElementById('importo').value = '';
-                    loadTransactions();
                 })
-                .catch(e => {
-                    console.error('Errore salvataggio:', e);
-                    showError('appError', 'Errore nel salvataggio: ' + e.message);
+                .catch(error => {
+                    console.error('Errore salvataggio:', error);
+                    showError('appError', 'Errore nel salvataggio: ' + error.message);
                 });
         }
 
         function deleteTransaction(id) {
-            const url = buildWorkerUrl(`transactions/${sessionId}/${id}`);
-
-            fetch(url, { method: 'DELETE' })
-                .then(() => loadTransactions())
-                .catch(e => {
-                    console.error('Errore eliminazione:', e);
-                    showError('appError', 'Errore eliminazione: ' + e.message);
+            dbRef.child(id).remove()
+                .catch(error => {
+                    console.error('Errore eliminazione:', error);
+                    showError('appError', 'Errore eliminazione: ' + error.message);
                 });
         }
 
@@ -554,26 +526,37 @@
         }
 
         function disconnect() {
+            if (db) {
+                firebase.database().goOffline();
+            }
             localStorage.clear();
-            config = {};
+            db = null;
             sessionId = null;
             transactions = [];
+            dbRef = null;
             showSetup();
-            document.getElementById('workerUrl').value = '';
             document.getElementById('dbUrl').value = '';
-            document.getElementById('apiKey').value = '';
         }
 
         // Auto-restore
         window.addEventListener('load', () => {
-            const savedConfig = localStorage.getItem('config');
+            const savedDbUrl = localStorage.getItem('dbUrl');
             const savedSession = localStorage.getItem('sessionId');
-            if (savedConfig && savedSession) {
-                config = JSON.parse(savedConfig);
-                sessionId = savedSession;
-                showApp();
-                loadTransactions();
-                setInterval(loadTransactions, 1000);
+            if (savedDbUrl && savedSession) {
+                try {
+                    const firebaseConfig = {
+                        apiKey: "AIzaSyDSD5yXLsnJNrMZasdQBqC8i1d_0U9kpz0",
+                        databaseURL: savedDbUrl
+                    };
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.database();
+                    sessionId = savedSession;
+                    dbRef = db.ref(`transactions/${sessionId}`);
+                    showApp();
+                    loadTransactions();
+                } catch (e) {
+                    console.log('Firebase già inizializzato');
+                }
             }
         });
     </script>
