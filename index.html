@@ -200,6 +200,24 @@
             </div>
 
             <div class="card">
+                <h2>Seleziona Discoteca</h2>
+                <div class="form-row">
+                    <div>
+                        <label>Discoteca</label>
+                        <select id="discoteca">
+                            <option value="astrolabio">Astrolabio</option>
+                            <option value="borgo">Borgo delle Colonne</option>
+                            <option value="custom">Altro (specifica)</option>
+                        </select>
+                    </div>
+                    <div id="customDiscotecaDiv" style="display:none;">
+                        <label>Specifica Discoteca</label>
+                        <input type="text" id="customDiscoteca" placeholder="Nome discoteca">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
                 <h2>Aggiungi Transazione</h2>
                 <div id="appError" class="error"></div>
                 <div class="form-row">
@@ -218,6 +236,10 @@
                             <option value="donazioni">Donazioni</option>
                             <option value="altro">Altro</option>
                         </select>
+                    </div>
+                    <div id="customCategoriaDiv" style="display:none;">
+                        <label>Specifica Categoria</label>
+                        <input type="text" id="customCategoria" placeholder="Categoria custom">
                     </div>
                 </div>
                 <div class="form-row">
@@ -280,7 +302,28 @@
             const desc = document.getElementById('descrizione').value.trim();
             const importo = document.getElementById('importo').value.trim();
             const tipo = document.getElementById('tipo').value;
-            const categoria = document.getElementById('categoria').value;
+            let categoria = document.getElementById('categoria').value;
+            let discoteca = document.getElementById('discoteca').value;
+
+            // Gestisci categoria custom
+            if (categoria === 'custom') {
+                const customCat = document.getElementById('customCategoria').value.trim();
+                if (!customCat) {
+                    showError('appError', 'Specifica la categoria custom');
+                    return;
+                }
+                categoria = customCat;
+            }
+
+            // Gestisci discoteca custom
+            if (discoteca === 'custom') {
+                const customDisco = document.getElementById('customDiscoteca').value.trim();
+                if (!customDisco) {
+                    showError('appError', 'Specifica la discoteca');
+                    return;
+                }
+                discoteca = customDisco;
+            }
 
             if (!desc || !importo) {
                 showError('appError', 'Compila tutti i campi');
@@ -293,6 +336,7 @@
                 amount: parseFloat(importo),
                 type: tipo,
                 category: categoria,
+                discoteca: discoteca,
                 timestamp: new Date().toLocaleTimeString('it-IT'),
                 session_id: sessionId
             };
@@ -314,6 +358,8 @@
                 if (response.ok) {
                     document.getElementById('descrizione').value = '';
                     document.getElementById('importo').value = '';
+                    document.getElementById('customCategoria').value = '';
+                    document.getElementById('customDiscoteca').value = '';
                     loadTransactions();
                 } else {
                     showError('appError', 'Errore nel salvataggio');
@@ -373,14 +419,38 @@
         function updateCategories() {
             const tipo = document.getElementById('tipo').value;
             const categorySelect = document.getElementById('categoria');
+            const customDiv = document.getElementById('customCategoriaDiv');
+            
             const categories = {
-                entrata: ['Biglietti', 'Consumazioni', 'Donazioni', 'Altro'],
-                uscita: ['Rifornimenti', 'Personale', 'Utenze', 'Manutenzione', 'Altro']
+                entrata: ['Biglietti', 'Consumazioni', 'Donazioni', 'Altro', 'Custom'],
+                uscita: ['Materiale', 'DJ', 'Promoter', 'Altro', 'Custom']
             };
 
             categorySelect.innerHTML = categories[tipo]
                 .map(c => `<option value="${c.toLowerCase()}">${c}</option>`)
                 .join('');
+            
+            categorySelect.addEventListener('change', toggleCustomCategoria);
+        }
+
+        function toggleCustomCategoria() {
+            const selected = document.getElementById('categoria').value;
+            const customDiv = document.getElementById('customCategoriaDiv');
+            if (selected === 'custom') {
+                customDiv.style.display = 'block';
+            } else {
+                customDiv.style.display = 'none';
+            }
+        }
+
+        function toggleCustomDiscoteca() {
+            const selected = document.getElementById('discoteca').value;
+            const customDiv = document.getElementById('customDiscotecaDiv');
+            if (selected === 'custom') {
+                customDiv.style.display = 'block';
+            } else {
+                customDiv.style.display = 'none';
+            }
         }
 
         function showError(elementId, message) {
@@ -400,6 +470,8 @@
 
         window.addEventListener('load', () => {
             const saved = localStorage.getItem('sessionId');
+            document.getElementById('discoteca').addEventListener('change', toggleCustomDiscoteca);
+            document.getElementById('categoria').addEventListener('change', toggleCustomCategoria);
             if (saved) {
                 sessionId = saved;
                 document.querySelector('.setup-screen').classList.remove('active');
